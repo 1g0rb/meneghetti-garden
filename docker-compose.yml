@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16
+    container_name: garden_db
+    environment:
+      POSTGRES_DB: garden
+      POSTGRES_USER: garden
+      POSTGRES_PASSWORD: gardenpass
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  web:
+    build: .
+    container_name: garden_web
+    environment:
+      DATABASE_URL: postgresql+psycopg2://garden:gardenpass@db:5432/garden
+      SECRET_KEY: change
+      ADMIN_USERNAME: igor
+      ADMIN_PASSWORD: igor
+    volumes:
+      - ./app:/app
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+
+volumes:
+  db_data:
