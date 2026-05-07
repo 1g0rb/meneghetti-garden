@@ -451,6 +451,7 @@ def html_page(title: str, body: str) -> str:
     """
     container_class = "container"
     body_class = ""
+    focused_frontend_titles = {"Danas", "Sutra", "Izvještaji", "Pregled zahtjeva"}
 
     if title == "Login" and not current_user.is_authenticated:
         topbar_class = "topbar topbar--hidden"
@@ -488,10 +489,10 @@ def html_page(title: str, body: str) -> str:
             brand_subtitle = ""
             role_badge = ""
             pagehead_html = ""
-            if current_user.role == "manager" and title in {"Izvještaji", "Pregled zahtjeva"}:
+            if title in focused_frontend_titles:
                 nav = """
-                <nav class="nav nav--kitchen nav--manager-back">
-                  <a class="nav__link nav__link--back" href="/kitchen">← Povratak na narudžbe</a>
+                <nav class="nav nav--kitchen nav--frontend-back">
+                  <a class="nav__link nav__link--back" href="/kitchen">← Natrag</a>
                 </nav>
                 """
             elif current_user.role == "manager":
@@ -805,7 +806,7 @@ def html_page(title: str, body: str) -> str:
           max-width: 430px;
           margin-top: -12px;
         }}
-        .nav--manager-back {{
+        .nav--frontend-back {{
           justify-content: flex-start;
           gap: 0;
           padding: 0 24px 18px 24px;
@@ -1424,17 +1425,6 @@ def html_page(title: str, body: str) -> str:
           margin: 0 auto;
           display: grid;
           gap: 16px;
-        }}
-        .kitchen-back-link {{
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          width: fit-content;
-          color: rgba(31,59,45,0.82);
-          font-size: 14px;
-          font-weight: 700;
-          text-decoration: none;
-          margin-top: 2px;
         }}
         .kitchen-day-view__header {{
           display: flex;
@@ -3155,8 +3145,6 @@ def kitchen_day_screen(for_date: date, day_key: str, heading: str, hero_image: s
 
     body = f"""
     <div class="kitchen-day-view">
-      <a class="kitchen-back-link" href="/kitchen">← Natrag</a>
-
       <header class="kitchen-day-view__header">
         <div>
           <h1 class="kitchen-day-view__title">{heading}</h1>
