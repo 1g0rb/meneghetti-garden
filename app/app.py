@@ -440,6 +440,15 @@ def html_page(title: str, body: str) -> str:
         </div>
     """
     container_class = "container"
+    body_class = ""
+
+    if title == "Login" and not current_user.is_authenticated:
+        topbar_class = "topbar topbar--hidden"
+        brand_subtitle = ""
+        role_badge = ""
+        pagehead_html = ""
+        container_class = "container container--login"
+        body_class = "login-page"
 
     if current_user.is_authenticated:
         if current_user.role == "admin":
@@ -529,6 +538,125 @@ def html_page(title: str, body: str) -> str:
           max-width: var(--maxw);
           margin: 0 auto;
           padding: 18px;
+        }}
+
+        .login-page {{
+          min-height: 100vh;
+          background:
+            radial-gradient(circle at top left, rgba(138,107,59,0.12), transparent 34%),
+            linear-gradient(180deg, #fbf7ef 0%, #eee3d0 100%);
+        }}
+
+        .container--login {{
+          width: 100%;
+          max-width: 480px;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 28px 20px 18px 20px;
+        }}
+
+        .login-shell {{
+          display: grid;
+          gap: 18px;
+        }}
+
+        .login-brand {{
+          text-align: center;
+          color: var(--accent);
+        }}
+
+        .login-brand__eyebrow {{
+          margin: 0 0 7px 0;
+          font-size: 11px;
+          font-weight: 850;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: rgba(31,59,45,0.72);
+        }}
+
+        .login-brand__title {{
+          margin: 0;
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: 34px;
+          line-height: 1.05;
+          letter-spacing: 0;
+        }}
+
+        .login-brand__subtitle {{
+          margin: 10px 0 0 0;
+          color: rgba(27,27,27,0.62);
+          font-size: 14px;
+          font-weight: 650;
+        }}
+
+        .login-card {{
+          padding: 24px 22px 22px 22px;
+          border-radius: 24px;
+          background: rgba(255,253,248,0.94);
+          border: 1px solid rgba(31,59,45,0.08);
+          box-shadow: 0 22px 44px rgba(29,45,35,0.13);
+        }}
+
+        .login-card h1 {{
+          margin: 0 0 18px 0;
+          color: var(--accent);
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: 30px;
+          line-height: 1.1;
+          letter-spacing: 0;
+          text-align: center;
+        }}
+
+        .login-card form {{
+          display: grid;
+          gap: 13px;
+        }}
+
+        .login-card label {{
+          margin: 0 0 -5px 0;
+          color: rgba(31,59,45,0.78);
+          font-size: 12px;
+          font-weight: 850;
+          letter-spacing: 0.04em;
+        }}
+
+        .login-card input {{
+          width: 100%;
+          min-height: 52px;
+          border-radius: 15px;
+          border: 1px solid rgba(31,59,45,0.13);
+          background: rgba(255,255,255,0.82);
+          padding: 13px 14px;
+          color: var(--ink);
+          font-size: 16px;
+          outline: none;
+        }}
+
+        .login-card input:focus {{
+          border-color: rgba(31,59,45,0.36);
+          box-shadow: 0 0 0 4px rgba(31,59,45,0.08);
+        }}
+
+        .login-card button {{
+          width: 100%;
+          min-height: 52px;
+          margin-top: 5px;
+          border-radius: 15px;
+          background: var(--accent);
+          color: #fffdf8;
+          font-size: 13px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          box-shadow: 0 12px 22px rgba(31,59,45,0.22);
+        }}
+
+        .login-page .footer {{
+          margin: 4px 0 0 0;
+          text-align: center;
+          color: rgba(27,27,27,0.48);
         }}
 
         /* ---------------- Header ---------------- */
@@ -2032,7 +2160,7 @@ def html_page(title: str, body: str) -> str:
       </style>
     </head>
 
-    <body>
+    <body class="{body_class}">
       <header class="{topbar_class}">
         <div class="brand">
           <div class="brand__left">
@@ -2947,15 +3075,23 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("root"))
     body = """
-    <div class="card">
-      <form method="post" action="/login">
-        <label>Korisničko ime</label>
-        <input name="username" required />
-        <label>Lozinka</label>
-        <input name="password" type="password" required />
-        <button type="submit">Login</button>
-      </form>
-      <p class="pill">Admin user se automatski kreira iz docker-compose env varijabli.</p>
+    <div class="login-shell">
+      <header class="login-brand">
+        <p class="login-brand__eyebrow">MENEGHETTI</p>
+        <h1 class="login-brand__title">Meneghetti Garden</h1>
+        <p class="login-brand__subtitle">Operativa vrta • berba • zahtjevi</p>
+      </header>
+
+      <section class="login-card">
+        <h1>Login</h1>
+        <form method="post" action="/login">
+          <label>Korisničko ime</label>
+          <input name="username" autocomplete="username" required />
+          <label>Lozinka</label>
+          <input name="password" type="password" autocomplete="current-password" required />
+          <button type="submit">Prijava</button>
+        </form>
+      </section>
     </div>
     """
     return html_page("Login", body)
