@@ -55,13 +55,43 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
+VALID_USER_ROLES = {"admin", "kitchen", "worker"}
+
+
+def home_endpoint_for_role(role: str) -> str:
+    if role == "admin":
+        return "admin_dashboard"
+    if role == "worker":
+        return "garden_worker_dashboard"
+    return "kitchen_dashboard"
+
 
 def admin_required(fn):
     @wraps(fn)
     @login_required
     def wrapper(*args, **kwargs):
         if getattr(current_user, "role", None) != "admin":
-            return redirect(url_for("kitchen_dashboard"))
+            return redirect(url_for(home_endpoint_for_role(getattr(current_user, "role", None))))
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def kitchen_required(fn):
+    @wraps(fn)
+    @login_required
+    def wrapper(*args, **kwargs):
+        if getattr(current_user, "role", None) not in {"admin", "kitchen"}:
+            return redirect(url_for(home_endpoint_for_role(getattr(current_user, "role", None))))
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def worker_required(fn):
+    @wraps(fn)
+    @login_required
+    def wrapper(*args, **kwargs):
+        if getattr(current_user, "role", None) not in {"admin", "worker"}:
+            return redirect(url_for(home_endpoint_for_role(getattr(current_user, "role", None))))
         return fn(*args, **kwargs)
     return wrapper
 
@@ -72,7 +102,7 @@ class User(Base, UserMixin):
     id = mapped_column(Integer, primary_key=True)
     username = mapped_column(String(80), unique=True, nullable=False)
     password_hash = mapped_column(String(255), nullable=False)
-    role = mapped_column(String(20), nullable=False, default="kitchen")  # admin / kitchen
+    role = mapped_column(String(20), nullable=False, default="kitchen")  # admin / kitchen / worker
     active = mapped_column(Boolean, nullable=False, default=True)
 
     def get_id(self):
@@ -416,6 +446,7 @@ def html_page(title: str, body: str) -> str:
             nav = """
             <nav class="nav">
               <a class="nav__link" href="/admin">Dashboard</a>
+              <a class="nav__link" href="/garden-worker">Worker</a>
               <a class="nav__link" href="/admin/users">Korisnici</a>
               <a class="nav__link" href="/admin/crops">Kulture</a>
               <a class="nav__link" href="/admin/harvest">Berba</a>
@@ -2945,7 +2976,7 @@ def login_post():
         return html_message_page("Login", "Pogrešno korisničko ime ili lozinka.", "/login", "Pokušaj ponovo")
 
     login_user(u)
-    return redirect(url_for("root"))
+    return redirect(url_for(home_endpoint_for_role(u.role)))
 
 
 @app.get("/logout")
@@ -2959,13 +2990,11 @@ def logout():
 def root():
     if not current_user.is_authenticated:
         return redirect(url_for("login"))
-    if current_user.role == "admin":
-        return redirect(url_for("admin_dashboard"))
-    return redirect(url_for("kitchen_dashboard"))
+    return redirect(url_for(home_endpoint_for_role(current_user.role)))
 
 
 @app.get("/kitchen")
-@login_required
+@kitchen_required
 def kitchen_dashboard():
     hero_image = "/static/images/background.jpg"
     hero_style = ""
@@ -3035,25 +3064,25 @@ def kitchen_dashboard():
 
 
 @app.get("/kitchen/today")
-@login_required
+@kitchen_required
 def kitchen_today():
     return kitchen_day_screen(date.today(), "today", "Danas", "/static/images/landing-reference.png")
 
 
 @app.get("/kitchen/tomorrow")
-@login_required
+@kitchen_required
 def kitchen_tomorrow():
     return kitchen_day_screen(date.today() + timedelta(days=1), "tomorrow", "Sutra", "/static/images/hero-garden-bg.png")
 
 
 @app.get("/kitchen/request-sent/<request_group_id>")
-@login_required
+@kitchen_required
 def kitchen_request_sent(request_group_id: str):
     return kitchen_success_screen(request_group_id)
 
 
 @app.get("/garden-worker")
-@login_required
+@worker_required
 def garden_worker_dashboard():
     with Session(engine) as s:
         items = (
@@ -3122,25 +3151,25 @@ def update_worker_group_status(group_id: str, target_status: str):
 
 
 @app.post("/garden-worker/request/<path:group_id>/start")
-@login_required
+@worker_required
 def garden_worker_start(group_id: str):
     return update_worker_group_status(group_id, "u_pripremi")
 
 
 @app.post("/garden-worker/request/<path:group_id>/delivered")
-@login_required
+@worker_required
 def garden_worker_delivered(group_id: str):
     return update_worker_group_status(group_id, "dostavljeno")
 
 
 @app.post("/garden-worker/request/<path:group_id>/not-possible")
-@login_required
+@worker_required
 def garden_worker_not_possible(group_id: str):
     return update_worker_group_status(group_id, "nije_moguce")
 
 
 @app.post("/kitchen/request")
-@login_required
+@kitchen_required
 def kitchen_request_post():
     if getattr(current_user, "role", None) != "kitchen":
         return redirect(url_for("admin_dashboard"))
@@ -3845,7 +3874,7 @@ def admin_users():
 
     body = f"""
     <div class="card">
-      <h3>Dodaj korisnika (kitchen)</h3>
+      <h3>Dodaj korisnika</h3>
       <form method="post" action="/admin/users/add">
         <label>Username</label>
         <input name="username" required placeholder="npr. kitchen1"/>
@@ -3856,6 +3885,7 @@ def admin_users():
         <label>Uloga</label>
         <select name="role">
           <option value="kitchen" selected>kitchen</option>
+          <option value="worker">worker</option>
           <option value="admin">admin</option>
         </select>
 
@@ -3987,7 +4017,7 @@ def admin_users_add():
 
     if not username or not password:
         return html_message_page("Greška", "Korisničko ime i lozinka su obavezni.", "/admin/users")
-    if role not in {"kitchen", "admin"}:
+    if role not in VALID_USER_ROLES:
         return html_message_page("Greška", "Odabrana uloga nije ispravna.", "/admin/users")
 
     with Session(engine) as s:
