@@ -488,7 +488,13 @@ def html_page(title: str, body: str) -> str:
             brand_subtitle = ""
             role_badge = ""
             pagehead_html = ""
-            if current_user.role == "manager":
+            if current_user.role == "manager" and title in {"Izvještaji", "Pregled zahtjeva"}:
+                nav = """
+                <nav class="nav nav--kitchen nav--manager-back">
+                  <a class="nav__link nav__link--back" href="/kitchen">← Povratak na narudžbe</a>
+                </nav>
+                """
+            elif current_user.role == "manager":
                 nav = """
                 <nav class="nav nav--kitchen">
                   <a class="nav__link" href="/kitchen">Narudžbe</a>
@@ -798,6 +804,22 @@ def html_page(title: str, body: str) -> str:
           padding: 0 24px 0 24px;
           max-width: 430px;
           margin-top: -12px;
+        }}
+        .nav--manager-back {{
+          justify-content: flex-start;
+          gap: 0;
+          padding: 0 24px 18px 24px;
+          margin-top: 4px;
+        }}
+        .nav__link--back {{
+          min-height: 44px;
+          display: inline-flex;
+          align-items: center;
+          padding: 10px 13px;
+          background: rgba(255,255,255,0.58);
+          border-color: rgba(31,59,45,0.10);
+          color: var(--accent);
+          box-shadow: 0 6px 14px rgba(29,45,35,0.045);
         }}
         .container--kitchen-dayview .footer {{
           display: none;
