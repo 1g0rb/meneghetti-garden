@@ -55,7 +55,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
-VALID_USER_ROLES = {"admin", "kitchen", "worker"}
+VALID_USER_ROLES = {"admin", "kitchen", "manager", "worker"}
 
 
 def home_endpoint_for_role(role: str) -> str:
@@ -80,7 +80,17 @@ def kitchen_required(fn):
     @wraps(fn)
     @login_required
     def wrapper(*args, **kwargs):
-        if getattr(current_user, "role", None) not in {"admin", "kitchen"}:
+        if getattr(current_user, "role", None) not in {"admin", "kitchen", "manager"}:
+            return redirect(url_for(home_endpoint_for_role(getattr(current_user, "role", None))))
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def manager_required(fn):
+    @wraps(fn)
+    @login_required
+    def wrapper(*args, **kwargs):
+        if getattr(current_user, "role", None) not in {"admin", "manager"}:
             return redirect(url_for(home_endpoint_for_role(getattr(current_user, "role", None))))
         return fn(*args, **kwargs)
     return wrapper
@@ -102,7 +112,7 @@ class User(Base, UserMixin):
     id = mapped_column(Integer, primary_key=True)
     username = mapped_column(String(80), unique=True, nullable=False)
     password_hash = mapped_column(String(255), nullable=False)
-    role = mapped_column(String(20), nullable=False, default="kitchen")  # admin / kitchen / worker
+    role = mapped_column(String(20), nullable=False, default="kitchen")  # admin / kitchen / manager / worker
     active = mapped_column(Boolean, nullable=False, default=True)
 
     def get_id(self):
@@ -478,12 +488,23 @@ def html_page(title: str, body: str) -> str:
             brand_subtitle = ""
             role_badge = ""
             pagehead_html = ""
-            nav = """
-            <nav class="nav nav--kitchen">
-              <span class="nav__spacer"></span>
-              <a class="nav__link nav__link--muted nav__link--quiet" href="/logout">Odjava</a>
-            </nav>
-            """
+            if current_user.role == "manager":
+                nav = """
+                <nav class="nav nav--kitchen">
+                  <a class="nav__link" href="/kitchen">Narudžbe</a>
+                  <a class="nav__link" href="/manager/reports">Izvještaji</a>
+                  <a class="nav__link" href="/manager/requests">Pregled zahtjeva</a>
+                  <span class="nav__spacer"></span>
+                  <a class="nav__link nav__link--muted nav__link--quiet" href="/logout">Odjava</a>
+                </nav>
+                """
+            else:
+                nav = """
+                <nav class="nav nav--kitchen">
+                  <span class="nav__spacer"></span>
+                  <a class="nav__link nav__link--muted nav__link--quiet" href="/logout">Odjava</a>
+                </nav>
+                """
 
     return f"""
     <!doctype html>
@@ -1956,6 +1977,92 @@ def html_page(title: str, body: str) -> str:
           color: rgba(27,27,27,0.60);
           border: 1px solid rgba(31,59,45,0.06);
         }}
+        .manager-links {{
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          margin-top: 12px;
+        }}
+        .manager-panel {{
+          display: grid;
+          gap: 16px;
+          padding: 18px 0 6px 0;
+        }}
+        .manager-panel__header {{
+          display: grid;
+          gap: 6px;
+        }}
+        .manager-panel__eyebrow {{
+          color: rgba(31,59,45,0.66);
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }}
+        .manager-panel__title {{
+          margin: 0;
+          color: var(--accent);
+          font-family: Georgia, "Times New Roman", Times, serif;
+          font-size: 32px;
+          line-height: 1.05;
+          letter-spacing: 0;
+        }}
+        .manager-panel__subtitle {{
+          margin: 0;
+          color: rgba(27,27,27,0.62);
+          font-size: 14px;
+          line-height: 1.45;
+        }}
+        .manager-card-list {{
+          display: grid;
+          gap: 11px;
+        }}
+        .manager-request-card,
+        .manager-report-card {{
+          display: grid;
+          gap: 11px;
+          padding: 15px;
+          border-radius: 18px;
+          background: rgba(255,253,248,0.94);
+          border: 1px solid rgba(31,59,45,0.08);
+          box-shadow: 0 8px 18px rgba(29,45,35,0.045);
+        }}
+        .manager-request-card__top,
+        .manager-report-card__top {{
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+        }}
+        .manager-request-card__title,
+        .manager-report-card__title {{
+          color: var(--accent);
+          font-size: 14px;
+          font-weight: 900;
+        }}
+        .manager-request-card__meta,
+        .manager-report-card__meta {{
+          color: rgba(27,27,27,0.58);
+          font-size: 12px;
+          line-height: 1.45;
+        }}
+        .manager-request-card__items {{
+          margin: 0;
+          padding-left: 18px;
+          color: rgba(27,27,27,0.78);
+          line-height: 1.55;
+        }}
+        .manager-report-grid {{
+          display: grid;
+          gap: 11px;
+        }}
+        .manager-empty {{
+          padding: 14px;
+          border-radius: 16px;
+          background: rgba(255,255,255,0.62);
+          color: rgba(27,27,27,0.60);
+          border: 1px solid rgba(31,59,45,0.06);
+        }}
         .kitchen-success-banner {{
           border-radius: 28px;
           overflow: hidden;
@@ -2297,6 +2404,49 @@ def report_table(rows) -> str:
         return "<p>Nema podataka za zadnjih 30 dana.</p>"
     html_rows = "".join([f"<tr><td>{r[0]}</td><td>{format_qty_with_unit(r[2] or 0, r[1])}</td></tr>" for r in rows])
     return f"<table><tr><th>Kultura</th><th>Ukupno</th></tr>{html_rows}</table>"
+
+
+def manager_request_card(group) -> str:
+    first_item = group["items"][0]
+    created_by = first_item.created_by.username if first_item.created_by else "-"
+    items_html = "".join([f"<li>{request_item_summary_text(item)}</li>" for item in group["items"]])
+    return f"""
+    <article class="manager-request-card">
+      <div class="manager-request-card__top">
+        <div>
+          <div class="manager-request-card__title">{kitchen_request_target_label(group["requested_for"])}</div>
+          <div class="manager-request-card__meta">Poslao: {created_by} • {group["created_at"].strftime('%d.%m. %H:%M')}</div>
+        </div>
+        <div class="recent-request__status recent-request__status--{group["status"]}">{REQUEST_STATUS_LABELS.get(group["status"], group["status"])}</div>
+      </div>
+      <ul class="manager-request-card__items">{items_html}</ul>
+    </article>
+    """
+
+
+def manager_requests_list(groups) -> str:
+    if not groups:
+        return '<div class="manager-empty">Još nema zahtjeva za prikaz.</div>'
+    return '<div class="manager-card-list">' + "".join(manager_request_card(group) for group in groups) + '</div>'
+
+
+def manager_report_cards(rows) -> str:
+    if not rows:
+        return '<div class="manager-empty">Nema berbe za odabrani period.</div>'
+    cards = []
+    for row in rows:
+        cards.append(f"""
+        <article class="manager-report-card">
+          <div class="manager-report-card__top">
+            <div>
+              <div class="manager-report-card__title">{row[0]}</div>
+              <div class="manager-report-card__meta">Ukupno ubrano</div>
+            </div>
+            <span class="pill pill--accent">{format_qty_with_unit(row[2] or 0, row[1])}</span>
+          </div>
+        </article>
+        """)
+    return '<div class="manager-report-grid">' + "".join(cards) + '</div>'
 
 
 
@@ -3149,6 +3299,25 @@ def kitchen_dashboard():
     if os.path.exists(os.path.join(app.root_path, "app", "static", "images", "basket-hero-reference.png")):
         basket_html = '<img class="kitchen-home-clean__basket" src="/static/images/basket-hero-reference.png" alt="Košara s povr?em">'
 
+    manager_links_html = ""
+    if getattr(current_user, "role", None) == "manager":
+        manager_links_html = """
+        <section class="manager-links" aria-label="Manager pregledi">
+          <a class="kitchen-action-card kitchen-action-card--secondary" href="/manager/reports">
+            <span class="kitchen-action-card__content">
+              <span class="kitchen-action-card__title">IZVJEŠTAJI</span>
+              <span class="kitchen-action-card__hint">Berba i dostupnost</span>
+            </span>
+          </a>
+          <a class="kitchen-action-card kitchen-action-card--secondary" href="/manager/requests">
+            <span class="kitchen-action-card__content">
+              <span class="kitchen-action-card__title">ZAHTJEVI</span>
+              <span class="kitchen-action-card__hint">Pregled svih narudžbi</span>
+            </span>
+          </a>
+        </section>
+        """
+
     body = f"""
     <div class="kitchen-home-page"{hero_style}>
       <div class="kitchen-home-clean">
@@ -3192,6 +3361,8 @@ def kitchen_dashboard():
           Odaberi dan kako bi vidio ponudu, status i sljedeći korak za kuhinju.
         </section>
 
+        {manager_links_html}
+
         {basket_html}
       </div>
     </div>
@@ -3215,6 +3386,120 @@ def kitchen_tomorrow():
 @kitchen_required
 def kitchen_request_sent(request_group_id: str):
     return kitchen_success_screen(request_group_id)
+
+
+@app.get("/manager/requests")
+@manager_required
+def manager_requests():
+    with Session(engine) as s:
+        items = (
+            s.query(KitchenRequest)
+            .options(joinedload(KitchenRequest.crop), joinedload(KitchenRequest.created_by))
+            .order_by(
+                text("CASE "
+                    "WHEN status='zaprimljeno' THEN 1 "
+                    "WHEN status='open' THEN 1 "
+                    "WHEN status='u_pripremi' THEN 2 "
+                    "WHEN status='approved' THEN 2 "
+                    "WHEN status='dostavljeno' THEN 3 "
+                    "WHEN status='applied' THEN 3 "
+                    "WHEN status='nije_moguce' THEN 4 "
+                    "WHEN status='rejected' THEN 4 "
+                    "ELSE 9 END"),
+                KitchenRequest.created_at.desc(),
+            )
+            .limit(120)
+            .all()
+        )
+
+    groups = group_kitchen_requests(items)
+    body = f"""
+    <div class="manager-panel">
+      <header class="manager-panel__header">
+        <div class="manager-panel__eyebrow">Manager pregled</div>
+        <h1 class="manager-panel__title">Pregled zahtjeva</h1>
+        <p class="manager-panel__subtitle">Read-only pregled svih kuhinjskih narudžbi prema vrtu.</p>
+      </header>
+      {manager_requests_list(groups)}
+    </div>
+    """
+    return html_page("Pregled zahtjeva", body)
+
+
+@app.get("/manager/reports")
+@manager_required
+def manager_reports():
+    today = date.today()
+    month_start = date(today.year, today.month, 1)
+    if today.month == 12:
+        month_end = date(today.year + 1, 1, 1)
+    else:
+        month_end = date(today.year, today.month + 1, 1)
+
+    start_dt = datetime.combine(month_start, time.min)
+    end_dt = datetime.combine(month_end, time.min)
+
+    with engine.connect() as conn:
+        harvest_rows = conn.execute(text("""
+            SELECT c.name, c.unit, COALESCE(SUM(h.qty), 0) AS total_qty
+            FROM harvests h
+            JOIN crops c ON c.id = h.crop_id
+            WHERE h.datetime >= :start_dt
+              AND h.datetime <  :end_dt
+            GROUP BY c.name, c.unit
+            ORDER BY total_qty DESC NULLS LAST;
+        """), {"start_dt": start_dt, "end_dt": end_dt}).fetchall()
+
+    with Session(engine) as s:
+        today_availability = (
+            s.query(Availability)
+            .options(joinedload(Availability.crop))
+            .filter(Availability.date == today)
+            .order_by(Availability.qty.desc(), Availability.id.asc())
+            .all()
+        )
+        tomorrow_availability = (
+            s.query(Availability)
+            .options(joinedload(Availability.crop))
+            .filter(Availability.date == today + timedelta(days=1))
+            .order_by(Availability.qty.desc(), Availability.id.asc())
+            .all()
+        )
+
+    body = f"""
+    <div class="manager-panel">
+      <header class="manager-panel__header">
+        <div class="manager-panel__eyebrow">Manager pregled</div>
+        <h1 class="manager-panel__title">Izvještaji</h1>
+        <p class="manager-panel__subtitle">Sažetak berbe za {today.year}-{today.month:02d} i read-only stanje dostupnosti.</p>
+      </header>
+
+      <section class="kitchen-section-card">
+        <div class="kitchen-section-card__head">
+          <h3>Berba ovaj mjesec</h3>
+          <span class="kitchen-section-card__chip">{today.strftime('%m.%Y.')}</span>
+        </div>
+        {manager_report_cards(harvest_rows)}
+      </section>
+
+      <section class="kitchen-section-card">
+        <div class="kitchen-section-card__head">
+          <h3>Dostupnost danas</h3>
+          <span class="kitchen-section-card__chip">{today.strftime('%d.%m.')}</span>
+        </div>
+        {availability_cards(today_availability)}
+      </section>
+
+      <section class="kitchen-section-card">
+        <div class="kitchen-section-card__head">
+          <h3>Dostupnost sutra</h3>
+          <span class="kitchen-section-card__chip">{(today + timedelta(days=1)).strftime('%d.%m.')}</span>
+        </div>
+        {availability_cards(tomorrow_availability)}
+      </section>
+    </div>
+    """
+    return html_page("Izvještaji", body)
 
 
 @app.get("/garden-worker")
@@ -3307,8 +3592,8 @@ def garden_worker_not_possible(group_id: str):
 @app.post("/kitchen/request")
 @kitchen_required
 def kitchen_request_post():
-    if getattr(current_user, "role", None) != "kitchen":
-        return redirect(url_for("admin_dashboard"))
+    if getattr(current_user, "role", None) not in {"kitchen", "manager"}:
+        return redirect(url_for(home_endpoint_for_role(getattr(current_user, "role", None))))
 
     requested_for_str = (request.form.get("requested_for") or "").strip()
     if not requested_for_str:
@@ -4021,6 +4306,7 @@ def admin_users():
         <label>Uloga</label>
         <select name="role">
           <option value="kitchen" selected>kitchen</option>
+          <option value="manager">manager</option>
           <option value="worker">worker</option>
           <option value="admin">admin</option>
         </select>
